@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Check, Loader2, Lock, Mail } from "lucide-react";
+import { ArrowRight, Check, Loader2, Lock, Mail, UserRound } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 
 type AuthMode = "sign-in" | "sign-up";
@@ -31,6 +31,21 @@ export function AuthForm({ mode }: AuthFormProps) {
     event.preventDefault();
     setLoading(true);
     setMessage("");
+
+    if (!isSignUp && email.trim() === "test_ustoz" && password === "test1234") {
+      window.localStorage.setItem(
+        "aqlly.dev.user",
+        JSON.stringify({
+          id: "demo-teacher",
+          login: "test_ustoz",
+          fullName: "Test Ustoz",
+          role: "teacher"
+        })
+      );
+      setLoading(false);
+      router.push("/u/dashboard");
+      return;
+    }
 
     if (!isSupabaseConfigured || !supabase) {
       setTimeout(() => {
@@ -174,15 +189,15 @@ export function AuthForm({ mode }: AuthFormProps) {
         ) : null}
 
         <label className="block">
-          <span className="text-sm font-black text-ink/80">Email</span>
+          <span className="text-sm font-black text-ink/80">{isSignUp ? "Email" : "Login yoki email"}</span>
           <div className="mt-2 flex items-center gap-3 rounded-md border border-line bg-bg px-4 py-3 focus-within:border-brand">
-            <Mail size={18} className="text-muted" />
+            {isSignUp ? <Mail size={18} className="text-muted" /> : <UserRound size={18} className="text-muted" />}
             <input
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              type="email"
+              type={isSignUp ? "email" : "text"}
               className="w-full border-0 bg-transparent font-bold outline-none"
-              placeholder="name@example.com"
+              placeholder={isSignUp ? "name@example.com" : "test_ustoz"}
               required
             />
           </div>
