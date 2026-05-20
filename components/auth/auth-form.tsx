@@ -45,6 +45,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         email,
         password,
         options: {
+          emailRedirectTo: `${window.location.origin}/boshlash`,
           data: {
             full_name: fullName,
             school_name: school,
