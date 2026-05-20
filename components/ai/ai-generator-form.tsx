@@ -15,22 +15,40 @@ export function AiGeneratorForm() {
   const [difficulty, setDifficulty] = useState("O'rta");
   const [language, setLanguage] = useState("O'zbek lotin");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
   const preview = useMemo(() => {
     if (!sourceText.trim()) return null;
     return generateQuizDraft({ sourceText, count: Math.min(count, 3), difficulty, language });
   }, [count, difficulty, language, sourceText]);
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
+    setMessage("");
 
-    const quiz = generateQuizDraft({ sourceText, count, difficulty, language });
-    saveStoredQuiz(quiz);
+    try {
+      const response = await fetch("/api/ai/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceText, count, difficulty, language })
+      });
+      const data = (await response.json()) as {
+        quiz?: ReturnType<typeof generateQuizDraft>;
+        error?: string;
+        provider?: "gemini" | "demo";
+      };
 
-    setTimeout(() => {
+      if (!response.ok || !data.quiz) {
+        throw new Error(data.error || "AI generator javob qaytarmadi.");
+      }
+
+      const quiz = saveStoredQuiz(data.quiz);
       router.push(`/u/mashqlar/${quiz.id}/tahrir`);
-    }, 250);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "AI generator ishlamadi.");
+      setLoading(false);
+    }
   }
 
   return (
@@ -43,7 +61,7 @@ export function AiGeneratorForm() {
           <div>
             <h2 className="text-xl font-black">Manba matn</h2>
             <p className="mt-1 text-sm font-semibold leading-6 text-muted">
-              Dars matni, konspekt yoki mavzu rejasini kiriting. Hozircha demo generator ishlaydi.
+              Dars matni, konspekt yoki mavzu rejasini kiriting. Gemini AI savollarni JSON formatda tayyorlaydi.
             </p>
           </div>
         </div>
@@ -117,8 +135,9 @@ export function AiGeneratorForm() {
           className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-md bg-brand px-5 font-black text-white shadow-[0_3px_0_#B45309] disabled:opacity-70"
         >
           {loading ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
-          Quiz draft yaratish
+          {loading ? "AI savollar tayyorlayapti..." : "Quiz draft yaratish"}
         </button>
+        {message ? <p className="mt-4 rounded-md bg-bad/10 p-3 text-sm font-bold text-bad">{message}</p> : null}
       </form>
 
       <section className="rounded-lg border border-line bg-white p-6 shadow-sm">
@@ -177,7 +196,7 @@ export function AiGeneratorForm() {
         <div className="mt-5 flex items-start gap-3 rounded-lg bg-brand-tint p-4">
           <BookOpen size={20} className="mt-0.5 shrink-0 text-brand-dark" />
           <p className="text-sm font-semibold leading-6 text-muted">
-            Real AI API hozir ulanmagan. Sayt tayyor bo'lgach, shu oqimga server API route orqali OpenAI/Supabase ulash mumkin.
+            Real AI endi server route orqali ishlaydi. API key browserga chiqmaydi, Vercel environment variable ichida saqlanadi.
           </p>
         </div>
       </section>
