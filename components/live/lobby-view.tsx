@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Play, QrCode, Sparkles, UsersRound } from "lucide-react";
+import { getCloudSession, startCloudSession } from "@/lib/cloud-live-sessions";
 import { getStoredSession, LiveSession, startStoredSession } from "@/lib/live-sessions";
 
 export function LobbyView({ code }: { code: string }) {
@@ -12,16 +13,20 @@ export function LobbyView({ code }: { code: string }) {
   const [joinUrl, setJoinUrl] = useState("");
 
   useEffect(() => {
-    const load = () => setSession(getStoredSession(code));
+    const load = async () => {
+      const cloudState = await getCloudSession(code);
+      setSession(cloudState?.session ?? getStoredSession(code));
+    };
     load();
     setJoinUrl(`${window.location.origin}/q?code=${code}`);
     const timer = window.setInterval(load, 1200);
     return () => window.clearInterval(timer);
   }, [code]);
 
-  function markRunning() {
-    const next = startStoredSession(code);
-    setSession(next);
+  async function markRunning() {
+    const cloudState = await startCloudSession(code);
+    const next = cloudState?.session ?? startStoredSession(code);
+    setSession(next ?? null);
     router.push(`/u/jonli/${code}/xost`);
   }
 

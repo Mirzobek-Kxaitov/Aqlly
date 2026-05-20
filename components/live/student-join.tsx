@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, CheckCircle2, QrCode, Search } from "lucide-react";
+import { addCloudPlayer, getCloudSession } from "@/lib/cloud-live-sessions";
 import { addStoredPlayer, getStoredSession, LivePlayer, LiveSession } from "@/lib/live-sessions";
 import { Logo } from "@/components/logo";
 
@@ -15,25 +16,43 @@ export function StudentJoin({ initialCode = "" }: { initialCode?: string }) {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    if (initialCode) setSession(getStoredSession(initialCode));
+    async function load() {
+      if (!initialCode) return;
+      const cloudState = await getCloudSession(initialCode);
+      setSession(cloudState?.session ?? getStoredSession(initialCode));
+    }
+    load();
   }, [initialCode]);
 
   const codeDigits = useMemo(() => code.padEnd(6, " ").slice(0, 6).split(""), [code]);
   const roster = session?.players ?? [];
 
-  function findSession() {
-    const found = getStoredSession(code);
+  async function findSession() {
+    const cloudState = await getCloudSession(code);
+    const found = cloudState?.session ?? getStoredSession(code);
     setSession(found);
     setMessage(found ? "" : "Bunday PIN topilmadi.");
   }
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const found = session || getStoredSession(code);
+    const cloudState = await getCloudSession(code);
+    const found = session || cloudState?.session || getStoredSession(code);
     if (!found) {
       setMessage("Avval to'g'ri PIN kiriting.");
       return;
     }
+
+    const nextCloudState = await addCloudPlayer(found.code, name.trim());
+    if (nextCloudState) {
+      const nextPlayer = nextCloudState.session.players[nextCloudState.session.players.length - 1] ?? null;
+      setSession(nextCloudState.session);
+      setPlayer(nextPlayer);
+      setJoined(Boolean(nextPlayer));
+      setMessage(nextPlayer ? "" : "O'quvchi qo'shilmadi.");
+      return;
+    }
+
     const result = addStoredPlayer(found.code, name.trim());
     setSession(result.session);
     setPlayer(result.player);

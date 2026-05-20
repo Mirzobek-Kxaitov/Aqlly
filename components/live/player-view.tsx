@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Clock3, Trophy, XCircle } from "lucide-react";
+import { getCloudSession, submitCloudAnswer } from "@/lib/cloud-live-sessions";
 import { getStoredSession, LiveSession, submitStoredAnswer } from "@/lib/live-sessions";
 import { getStoredQuiz, Quiz } from "@/lib/quizzes";
 import { Logo } from "@/components/logo";
@@ -22,10 +23,16 @@ export function PlayerView({ code, playerId }: { code: string; playerId?: string
   const [selected, setSelected] = useState<number | null>(null);
 
   useEffect(() => {
-    const load = () => {
-      const next = getStoredSession(code);
-      setSession(next);
-      setQuiz(next ? getStoredQuiz(next.quizId) : null);
+    const load = async () => {
+      const cloudState = await getCloudSession(code);
+      if (cloudState) {
+        setSession(cloudState.session);
+        setQuiz(cloudState.quiz);
+        return;
+      }
+      const localState = getStoredSession(code);
+      setSession(localState);
+      setQuiz(localState ? getStoredQuiz(localState.quizId) : null);
     };
     load();
     const timer = window.setInterval(load, 1000);
@@ -57,9 +64,20 @@ export function PlayerView({ code, playerId }: { code: string; playerId?: string
     setSelected(null);
   }, [question?.id]);
 
-  function answer(index: number) {
+  async function answer(index: number) {
     if (!question || !playerId || existingAnswer) return;
     setSelected(index);
+    const cloudState = await submitCloudAnswer({
+      code,
+      playerId,
+      questionId: question.id,
+      selectedIndex: index,
+      isCorrect: index === question.correctIndex
+    });
+    if (cloudState) {
+      setSession(cloudState.session);
+      return;
+    }
     submitStoredAnswer({
       code,
       playerId,

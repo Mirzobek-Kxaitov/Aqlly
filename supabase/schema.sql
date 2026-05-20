@@ -63,6 +63,19 @@ create table if not exists public.quiz_sessions (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.live_sessions (
+  code text primary key,
+  quiz_id text not null,
+  quiz_title text not null,
+  class_name text,
+  status text not null default 'lobby' check (status in ('lobby', 'running', 'finished')),
+  current_question_index integer not null default 0,
+  quiz_json jsonb not null,
+  players jsonb not null default '[]'::jsonb,
+  answers jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+
 alter table public.schools enable row level security;
 alter table public.teacher_profiles enable row level security;
 alter table public.classes enable row level security;
@@ -70,6 +83,7 @@ alter table public.students enable row level security;
 alter table public.class_students enable row level security;
 alter table public.activities enable row level security;
 alter table public.quiz_sessions enable row level security;
+alter table public.live_sessions enable row level security;
 
 create policy "teachers can read own profile"
   on public.teacher_profiles for select
@@ -98,3 +112,16 @@ create policy "teachers can manage own quiz sessions"
   on public.quiz_sessions for all
   using (host_id = auth.uid())
   with check (host_id = auth.uid());
+
+create policy "public can read live sessions"
+  on public.live_sessions for select
+  using (true);
+
+create policy "public can create live sessions"
+  on public.live_sessions for insert
+  with check (true);
+
+create policy "public can update live sessions"
+  on public.live_sessions for update
+  using (true)
+  with check (true);

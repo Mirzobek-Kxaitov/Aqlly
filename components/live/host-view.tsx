@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Flag, SkipForward, Timer, Trophy, UsersRound, XCircle } from "lucide-react";
+import { advanceCloudQuestion, finishCloudSession, getCloudSession } from "@/lib/cloud-live-sessions";
 import { advanceStoredQuestion, finishStoredSession, getStoredSession, LiveSession } from "@/lib/live-sessions";
 import { getStoredQuiz, Quiz } from "@/lib/quizzes";
 
@@ -20,10 +21,16 @@ export function HostView({ code }: { code: string }) {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
 
   useEffect(() => {
-    const load = () => {
-      const next = getStoredSession(code);
-      setSession(next);
-      setQuiz(next ? getStoredQuiz(next.quizId) : null);
+    const load = async () => {
+      const cloudState = await getCloudSession(code);
+      if (cloudState) {
+        setSession(cloudState.session);
+        setQuiz(cloudState.quiz);
+        return;
+      }
+      const localState = getStoredSession(code);
+      setSession(localState);
+      setQuiz(localState ? getStoredQuiz(localState.quizId) : null);
     };
     load();
     const timer = window.setInterval(load, 1200);
@@ -62,15 +69,17 @@ export function HostView({ code }: { code: string }) {
     );
   }
 
-  function nextQuestion() {
+  async function nextQuestion() {
     if (!quiz) return;
-    const next = advanceStoredQuestion(code, quiz.questions.length);
-    setSession(next);
+    const cloudState = await advanceCloudQuestion(code, quiz.questions.length);
+    const next = cloudState?.session ?? advanceStoredQuestion(code, quiz.questions.length);
+    setSession(next ?? null);
   }
 
-  function finish() {
-    const next = finishStoredSession(code);
-    setSession(next);
+  async function finish() {
+    const cloudState = await finishCloudSession(code);
+    const next = cloudState?.session ?? finishStoredSession(code);
+    setSession(next ?? null);
   }
 
   const correctCount = answersForQuestion.filter((answer) => answer.isCorrect).length;

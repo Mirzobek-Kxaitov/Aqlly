@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Play } from "lucide-react";
 import { getStoredClasses, TeacherClass } from "@/lib/classes";
+import { createCloudSession } from "@/lib/cloud-live-sessions";
 import { createStoredSession } from "@/lib/live-sessions";
 import { Quiz } from "@/lib/quizzes";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 
 export function StartLiveButton({ quiz }: { quiz: Quiz }) {
   const router = useRouter();
@@ -19,40 +19,16 @@ export function StartLiveButton({ quiz }: { quiz: Quiz }) {
     setLoading(true);
     const selectedClass = classes.find((item) => item.id === classId);
 
-    if (!isSupabaseConfigured || !supabase) {
-      const session = createStoredSession(quiz, selectedClass);
-      router.push(`/u/jonli/${session.code}/lobby`);
+    const cloudState = await createCloudSession(quiz, selectedClass);
+    if (cloudState) {
+      setLoading(false);
+      router.push(`/u/jonli/${cloudState.session.code}/lobby`);
       return;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
-      const session = createStoredSession(quiz, selectedClass);
-      router.push(`/u/jonli/${session.code}/lobby`);
-      return;
-    }
-
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    const { data, error } = await supabase
-      .from("quiz_sessions")
-      .insert({
-        activity_id: quiz.id,
-        host_id: userData.user.id,
-        class_id: selectedClass?.id || null,
-        code,
-        status: "lobby"
-      })
-      .select("code")
-      .single();
-
+    const session = createStoredSession(quiz, selectedClass);
     setLoading(false);
-    if (error || !data) {
-      const session = createStoredSession(quiz, selectedClass);
-      router.push(`/u/jonli/${session.code}/lobby`);
-      return;
-    }
-
-    router.push(`/u/jonli/${data.code}/lobby`);
+    router.push(`/u/jonli/${session.code}/lobby`);
   }
 
   if (!open) {
