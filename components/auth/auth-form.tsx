@@ -1,9 +1,9 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Check, Loader2, Phone, Send } from "lucide-react";
+import { ArrowRight, Check, Loader2, Lock, Mail } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 
 type AuthMode = "sign-in" | "sign-up";
@@ -14,7 +14,8 @@ type AuthFormProps = {
 
 export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter();
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [school, setSchool] = useState("");
   const [subject, setSubject] = useState("");
@@ -25,8 +26,6 @@ export function AuthForm({ mode }: AuthFormProps) {
   const isSignUp = mode === "sign-up";
   const title = isSignUp ? "Bepul hisob ochish" : "Qaytib kelganingiz bilan!";
   const description = isSignUp ? "Ustozlar uchun. Karta kerak emas, barchasi bepul." : "Hisobingizga kiring va davom eting.";
-
-  const normalizedPhone = useMemo(() => phone.replace(/[^\d+]/g, ""), [phone]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -41,18 +40,45 @@ export function AuthForm({ mode }: AuthFormProps) {
       return;
     }
 
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: normalizedPhone,
-      options: {
-        data: {
-          full_name: fullName,
-          school_name: school,
-          subject,
-          role: "teacher"
-        },
-        shouldCreateUser: isSignUp,
-        channel: "sms"
+    if (isSignUp) {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            school_name: school,
+            subject,
+            role: "teacher"
+          }
+        }
+      });
+
+      if (error) {
+        setLoading(false);
+        setMessage(error.message);
+        return;
       }
+
+      if (data.session) {
+        await supabase.from("teacher_profiles").upsert({
+          id: data.user?.id,
+          full_name: fullName,
+          subject: subject || null
+        });
+        setLoading(false);
+        router.push("/boshlash");
+        return;
+      }
+
+      setLoading(false);
+      setMessage("Tasdiqlash xati emailingizga yuborildi. Emailni tasdiqlab, keyin kirishingiz mumkin.");
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
     });
 
     setLoading(false);
@@ -61,7 +87,7 @@ export function AuthForm({ mode }: AuthFormProps) {
       return;
     }
 
-    setMessage("Tasdiqlash kodi yuborildi. Supabase SMS sozlamasi ulangach shu yerda OTP tekshirish qo'shiladi.");
+    router.push("/u/dashboard");
   }
 
   async function continueWithGoogle() {
@@ -78,10 +104,6 @@ export function AuthForm({ mode }: AuthFormProps) {
     });
   }
 
-  function continueWithTelegram() {
-    router.push(isSignUp ? "/boshlash" : "/u/dashboard");
-  }
-
   return (
     <div>
       <p className="text-sm font-bold text-muted">
@@ -93,7 +115,7 @@ export function AuthForm({ mode }: AuthFormProps) {
       <h1 className="mt-2 text-4xl font-black leading-tight">{title}</h1>
       <p className="mt-2 text-[15px] font-semibold leading-7 text-muted">{description}</p>
 
-      <div className="mt-7 grid grid-cols-2 gap-3">
+      <div className="mt-7 grid gap-3">
         <button
           type="button"
           onClick={continueWithGoogle}
@@ -101,18 +123,11 @@ export function AuthForm({ mode }: AuthFormProps) {
         >
           Google bilan
         </button>
-        <button
-          type="button"
-          onClick={continueWithTelegram}
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-md border border-line bg-white px-4 text-sm font-black"
-        >
-          <Send size={17} className="text-sky-500" /> Telegram bilan
-        </button>
       </div>
 
       <div className="my-6 flex items-center gap-3 text-xs font-black uppercase text-slate-300">
         <span className="h-px flex-1 bg-line" />
-        {isSignUp ? "Yoki telefon bilan" : "Yoki"}
+        {isSignUp ? "Yoki email bilan" : "Yoki"}
         <span className="h-px flex-1 bg-line" />
       </div>
 
@@ -158,15 +173,31 @@ export function AuthForm({ mode }: AuthFormProps) {
         ) : null}
 
         <label className="block">
-          <span className="text-sm font-black text-ink/80">Telefon raqami</span>
+          <span className="text-sm font-black text-ink/80">Email</span>
           <div className="mt-2 flex items-center gap-3 rounded-md border border-line bg-bg px-4 py-3 focus-within:border-brand">
-            <Phone size={18} className="text-muted" />
-            <span className="font-bold text-muted">+998</span>
+            <Mail size={18} className="text-muted" />
             <input
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              type="email"
               className="w-full border-0 bg-transparent font-bold outline-none"
-              placeholder="90 123 45 67"
+              placeholder="name@example.com"
+              required
+            />
+          </div>
+        </label>
+
+        <label className="block">
+          <span className="text-sm font-black text-ink/80">Parol</span>
+          <div className="mt-2 flex items-center gap-3 rounded-md border border-line bg-bg px-4 py-3 focus-within:border-brand">
+            <Lock size={18} className="text-muted" />
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              minLength={6}
+              className="w-full border-0 bg-transparent font-bold outline-none"
+              placeholder="Kamida 6 ta belgi"
               required
             />
           </div>
