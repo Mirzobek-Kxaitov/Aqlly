@@ -20,6 +20,8 @@ type GeminiGenerateResponse = {
   };
 };
 
+const geminiModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+
 const quizSchema = {
   type: "object",
   properties: {
@@ -102,29 +104,50 @@ export async function POST(request: Request) {
     sourceText
   ].join("\n");
 
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": process.env.GEMINI_API_KEY
-    },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: difficulty === "Qiyin" ? 0.55 : 0.35,
-        responseMimeType: "application/json",
-        responseJsonSchema: quizSchema
-      }
-    })
-  });
+  let data: GeminiGenerateResponse | null = null;
+  let usedModel = "";
+  let lastError = "Gemini API javob bermadi.";
 
-  const data = (await response.json()) as GeminiGenerateResponse;
+  for (const model of geminiModels) {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": process.env.GEMINI_API_KEY
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: difficulty === "Qiyin" ? 0.55 : 0.35,
+          responseMimeType: "application/json",
+          responseJsonSchema: quizSchema
+        }
+      })
+    });
 
-  if (!response.ok) {
-    return NextResponse.json(
-      { error: data.error?.message || "Gemini API javob bermadi." },
-      { status: response.status }
-    );
+    const candidateData = (await response.json()) as GeminiGenerateResponse;
+
+    if (response.ok) {
+      data = candidateData;
+      usedModel = model;
+      break;
+    }
+
+    lastError = candidateData.error?.message || lastError;
+    const canRetry =
+      response.status === 429 ||
+      response.status === 503 ||
+      lastError.toLowerCase().includes("high demand") ||
+      lastError.toLowerCase().includes("overloaded");
+
+    if (!canRetry) {
+      return NextResponse.json({ error: lastError }, { status: response.status });
+    }
+  }
+
+  if (!data) {
+    const fallback = generateQuizDraft({ sourceText, count, difficulty, language });
+    return NextResponse.json({ quiz: fallback, provider: "demo", warning: lastError });
   }
 
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -149,5 +172,5 @@ export async function POST(request: Request) {
     }))
   };
 
-  return NextResponse.json({ quiz, provider: "gemini" });
+  return NextResponse.json({ quiz, provider: "gemini", model: usedModel });
 }
